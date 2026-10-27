@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Candidate Dashboard</title>
+</head>
+<body>
+    <h1>Candidate Dashboard</h1>
+
+    <p>Welcome, {{ candidate.name }}!</p>
+
+    <p>Email: {{ candidate.email }}</p>
+
+    <p>Your login session is active.</p>
+
+    <form method="POST" action="{{ url_for('main.logout') }}">
+        <button type="submit">Logout</button>
+    </form>
+
+    <h2>Exam Controls</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %} <p class="{{ category }}">{{ message }}</p>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<form action="{{ url_for('main.start_exam') }}" method="POST">
+    <button type="submit">Start Exam</button>
+</form>
+
+<form action="{{ url_for('main.end_exam') }}" method="POST">
+    <button type="submit">End Exam</button>
+</form>
+
+
+<h2>Face Monitoring</h2>
+
+<form action="{{ url_for('main.start_monitoring') }}" method="POST">
+    <button type="submit">Start Face Monitoring</button>
+</form>
+
+
+
+</body>
+</html>

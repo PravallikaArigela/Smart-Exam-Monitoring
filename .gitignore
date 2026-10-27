@@ -1,0 +1,25 @@
+# Python virtual environment
+venv/
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Local database and candidate data
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables and secrets
+.env
+
+# Logs
+*.log
+
+# Editor settings
+.vscode/
+
+# Candidate photos and personal data
+app/static/photos/

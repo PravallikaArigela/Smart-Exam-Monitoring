@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Candidate Registration</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f5f9;
+            margin: 0;
+            padding: 30px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+            padding: 25px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            text-align: center;
+            color: #243b53;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 6px;
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+
+        video, canvas, #photoPreview {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 12px auto;
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 10px 16px;
+            margin-top: 12px;
+            margin-right: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #1769aa;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #104e82;
+        }
+
+        .message {
+            padding: 10px;
+            background: #eef3f8;
+            margin-bottom: 10px;
+        }
+
+        .error {
+            color: #b00020;
+        }
+
+        .success {
+            color: #16723b;
+        }
+
+        .register-button {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .note {
+            font-size: 13px;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    <h2>Candidate Registration</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <p class="message {{ category }}">{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST" id="registrationForm">
+
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required>
+
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required>
+
+        <label for="password">Password:</label>
+        <input
+            type="password"
+            id="password"
+            name="password"
+            minlength="8"
+            required
+        >
+
+        <hr style="margin-top: 25px;">
+
+        <h3>Registration Photo</h3>
+
+        <p class="note">
+            Allow camera access, position your face in the preview,
+            and capture a photo before registering.
+        </p>
+
+        <video id="video" autoplay playsinline></video>
+
+        <canvas id="canvas" hidden></canvas>
+
+        <img
+            id="photoPreview"
+            alt="Captured registration photo"
+            hidden
+        >
+
+        <input type="hidden" id="photo_data" name="photo_data">
+
+        <button type="button" id="startCamera">
+            Start Camera
+        </button>
+
+        <button type="button" id="capturePhoto" disabled>
+            Capture Photo
+        </button>
+
+        <button type="button" id="retakePhoto" hidden>
+            Retake Photo
+        </button>
+
+        <p id="cameraMessage" class="note" role="status">
+            Camera has not been started.
+        </p>
+
+        <button type="submit" class="register-button">
+            Register
+        </button>
+
+    </form>
+
+    <p>
+        Already registered?
+        <a href="{{ url_for('main.login') }}">Login</a>
+    </p>
+
+</div>
+
+<script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const photoPreview = document.getElementById("photoPreview");
+    const photoData = document.getElementById("photo_data");
+
+    const startButton = document.getElementById("startCamera");
+    const captureButton = document.getElementById("capturePhoto");
+    const retakeButton = document.getElementById("retakePhoto");
+
+    const cameraMessage = document.getElementById("cameraMessage");
+    const registrationForm = document.getElementById("registrationForm");
+
+    let cameraStream = null;
+
+    startButton.addEventListener("click", async function () {
+        try {
+            if (!navigator.mediaDevices ||
+                !navigator.mediaDevices.getUserMedia) {
+                throw new Error(
+                    "Camera access is unavailable. Please use a supported browser."
+                );
+            }
+
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "user",
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                },
+                audio: false
+            });
+
+            video.srcObject = cameraStream;
+
+            await video.play();
+
+            video.hidden = false;
+            photoPreview.hidden = true;
+
+            photoData.value = "";
+
+            captureButton.disabled = false;
+            retakeButton.hidden = true;
+
+            cameraMessage.textContent =
+                "Camera is ready. Press Capture Photo.";
+
+        } catch (error) {
+            cameraMessage.textContent =
+                "Unable to access camera. Check browser permissions and try again.";
+
+            console.error("Camera error:", error);
+        }
+    });
+
+    captureButton.addEventListener("click", function () {
+        if (!cameraStream || !video.videoWidth) {
+            cameraMessage.textContent =
+                "Start the camera and wait for the preview before capturing.";
+            return;
+        }
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const context = canvas.getContext("2d");
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = canvas.toDataURL("image/jpeg", 0.85);
+
+        photoData.value = imageData;
+        photoPreview.src = imageData;
+
+        video.hidden = true;
+        photoPreview.hidden = false;
+
+        captureButton.disabled = true;
+        retakeButton.hidden = false;
+
+        cameraMessage.textContent =
+            "Photo captured. Check the preview before registering.";
+
+        stopCamera();
+    });
+
+    retakeButton.addEventListener("click", async function () {
+        photoData.value = "";
+        photoPreview.hidden = true;
+        video.hidden = false;
+
+        await startButton.click();
+    });
+
+    registrationForm.addEventListener("submit", function (event) {
+        if (!photoData.value) {
+            event.preventDefault();
+
+            cameraMessage.textContent =
+                "Please start the camera and capture a photo before registering.";
+
+            cameraMessage.scrollIntoView({ behavior: "smooth" });
+        }
+    });
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+
+        video.srcObject = null;
+    }
+
+    window.addEventListener("pagehide", stopCamera);
+</script>
+
+</body>
+</html>
+
+
