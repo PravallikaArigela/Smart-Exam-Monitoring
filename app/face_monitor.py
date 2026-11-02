@@ -25,12 +25,35 @@ def monitor_exam(session_id):
 
     if not camera.isOpened():
         camera.release()
+        try:
+            db.session.add(
+                MonitoringEvent(
+                    session_id=session_id,
+                    event_type="camera_unavailable",
+                    event_time=datetime.now(timezone.utc),
+                    details="The webcam could not be opened."
+                )
+            )
+            db.session.commit()
+            
+        except Exception:
+            db.session.rollback()
+            return False, "Webcam unavailable; event logging failed."
+        
         return False, "Could not open the webcam."
 
     previous_event = None
 
     try:
         while True:
+            
+            db.session.expire_all()
+            exam = db.session.get(ExamSession, session_id)
+            
+            if exam is None or exam.status != "active":
+                print("Exam ended. Stopping face monitoring...")
+                break
+            
             success, frame = camera.read()
 
             if not success:
@@ -51,12 +74,31 @@ def monitor_exam(session_id):
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            faces = face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(30, 30)
-            )
+            try:
+                faces = face_cascade.detectMultiScale(
+                    gray,
+                    scaleFactor=1.1,
+                    minNeighbors=5,
+                    minSize=(30, 30)
+                )
+
+            except cv2.error as error:
+                try:
+                    db.session.add(
+                        MonitoringEvent(
+                            session_id=session_id,
+                            event_type="detection_failure",
+                            event_time=datetime.now(timezone.utc),
+                            details=f"Face detection failed: {error}"
+                        )
+                    )
+                    db.session.commit()
+
+                except Exception:
+                    db.session.rollback()
+
+                print(f"Face detection failed: {error}")
+                break
 
             face_count = len(faces)
 

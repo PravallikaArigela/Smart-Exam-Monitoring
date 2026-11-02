@@ -64,6 +64,11 @@ class ExamSession(db.Model):
     )
 
     end_time = db.Column(db.DateTime, nullable=True)
+    
+    last_heartbeat = db.Column(
+        db.DateTime,
+        nullable=True
+    )
 
     status = db.Column(
         db.String(20),

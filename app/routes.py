@@ -175,6 +175,7 @@ def login():
     return render_template("login.html")
 
 
+
 @main.route("/dashboard")
 def dashboard():
 
@@ -191,10 +192,77 @@ def dashboard():
         flash("Please log in again.", "error")
         return redirect(url_for("main.login"))
 
+    active_exam = ExamSession.query.filter_by(
+        candidate_id=candidate_id,
+        status="active"
+    ).order_by(ExamSession.id.desc()).first()
+
     return render_template(
         "dashboard.html",
-        candidate=candidate
+        candidate=candidate,
+        active_exam=active_exam
     )
+
+@main.route("/heartbeat", methods=["POST"])
+def heartbeat():
+
+    candidate_id = session.get("candidate_id")
+    exam_session_id = session.get("exam_session_id")
+
+    if candidate_id is None or exam_session_id is None:
+        return {"success": False, "message": "No active session."}, 401
+
+    exam = db.session.get(ExamSession, exam_session_id)
+
+    if (
+        exam is None
+        or exam.candidate_id != candidate_id
+        or exam.status != "active"
+    ):
+        return {"success": False, "message": "Exam is not active."}, 400
+
+    now = datetime.now(timezone.utc)
+
+    # Check whether the previous heartbeat is older than 60 seconds.
+    if exam.last_heartbeat is not None:
+
+        previous_heartbeat = exam.last_heartbeat
+
+        # SQLite may return a datetime without timezone information.
+        if previous_heartbeat.tzinfo is None:
+            previous_heartbeat = previous_heartbeat.replace(
+                tzinfo=timezone.utc
+            )
+
+        elapsed = (now - previous_heartbeat).total_seconds()
+
+        if elapsed > 60:
+            exam.status = "interrupted"
+            exam.end_time = now
+
+            db.session.add(
+                MonitoringEvent(
+                    session_id=exam.id,
+                    event_type="session_interrupted",
+                    event_time=now,
+                    details="Heartbeat timeout: no browser activity received for more than 60 seconds."
+                )
+            )
+
+            db.session.commit()
+
+            session.pop("exam_session_id", None)
+
+            return {
+                "success": False,
+                "message": "Exam session interrupted due to heartbeat timeout."
+            }, 409
+
+    exam.last_heartbeat = now
+    db.session.commit()
+
+    return {"success": True}, 200
+
 
 
 @main.route("/start_exam", methods=["POST"])
@@ -233,6 +301,8 @@ def start_exam():
 
     db.session.add(exam)
     db.session.flush()
+    
+    exam.last_heartbeat = datetime.now(timezone.utc)
 
     # Record that the exam session has started.
     event = MonitoringEvent(
@@ -270,6 +340,15 @@ def end_exam():
 
     active_exam.end_time = datetime.now(timezone.utc)
     active_exam.status = "completed"
+    
+    db.session.add( 
+        MonitoringEvent( 
+            session_id=active_exam.id, 
+            event_type="session_ended", 
+            event_time=datetime.now(timezone.utc), 
+            details="Candidate ended the examination normally." 
+        ) 
+    )
 
     db.session.commit()
 

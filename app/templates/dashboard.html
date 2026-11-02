@@ -40,7 +40,38 @@
     <button type="submit">Start Face Monitoring</button>
 </form>
 
-
-
 </body>
+
+
+<script>
+    const examActive = {{ 'true' if active_exam else 'false' }};
+
+    if (examActive) {
+        function sendHeartbeat() {
+            fetch("{{ url_for('main.heartbeat') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.log("Heartbeat stopped:", data.message);
+                }
+            })
+            .catch(error => {
+                console.log("Heartbeat error:", error);
+            });
+        }
+
+        // Send the first heartbeat immediately.
+        sendHeartbeat();
+
+        // Send another heartbeat every 15 seconds.
+        setInterval(sendHeartbeat, 15000);
+    }
+</script>
+
+
 </html>
