@@ -1,4 +1,3 @@
-from email import message
 import os
 import base64
 import uuid
@@ -16,7 +15,10 @@ from flask import (
 
 from app import db
 from datetime import datetime, timezone
-from app.face_monitor import monitor_exam
+from app.face_monitor import (
+    start_monitoring as start_face_monitoring,
+    stop_monitoring as stop_face_monitoring
+)
 from app.models import Candidate, ExamSession, MonitoringEvent
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -250,7 +252,10 @@ def heartbeat():
             )
 
             db.session.commit()
-
+            
+            if exam.monitoring_status == "running":
+                stop_face_monitoring(exam.id)
+                
             session.pop("exam_session_id", None)
 
             return {
@@ -338,6 +343,14 @@ def end_exam():
         flash("No active exam session was found.", "error")
         return redirect(url_for("main.dashboard"))
 
+
+    if active_exam.monitoring_status == "running":
+        success, message = stop_face_monitoring(active_exam.id)
+
+        if not success:
+            flash(message, "error")
+            return redirect(url_for("main.dashboard"))
+
     active_exam.end_time = datetime.now(timezone.utc)
     active_exam.status = "completed"
     
@@ -360,6 +373,7 @@ def end_exam():
 
 @main.route("/start_monitoring", methods=["POST"])
 def start_monitoring():
+
     candidate_id = session.get("candidate_id")
     exam_session_id = session.get("exam_session_id")
 
@@ -379,29 +393,61 @@ def start_monitoring():
         or exam.status != "active"
     ):
         session.pop("exam_session_id", None)
-        flash("No active exam found. Please start your exam again.", "error")
+        flash("No active exam found.", "error")
         return redirect(url_for("main.dashboard"))
 
     try:
-        print("DEBUG: Start Monitoring route was called")
-        print("DEBUG: Exam session ID:", exam.id)
+        success, message = start_face_monitoring(exam.id)
 
-        success, message = monitor_exam(exam.id)
-
-        print("DEBUG: Monitoring result:", success, message)
         flash(message, "success" if success else "error")
+
     except Exception:
         db.session.rollback()
-        current_app.logger.exception("Face monitoring failed.")
-        flash("Face monitoring failed. Check the application terminal.", "error")
+        current_app.logger.exception(
+            "Unable to start face monitoring."
+        )
+        flash("Face monitoring could not be started.", "error")
 
     return redirect(url_for("main.dashboard"))
 
+@main.route("/stop_monitoring_route", methods=["POST"])
+def stop_monitoring_route():
+    candidate_id = session.get("candidate_id")
+    exam_session_id = session.get("exam_session_id")
 
+    if not candidate_id or not exam_session_id:
+        flash("No active exam session found.", "error")
+        return redirect(url_for("main.dashboard"))
 
+    exam = db.session.get(ExamSession, exam_session_id)
+
+    if exam is None or exam.candidate_id != candidate_id:
+        flash("Invalid exam session.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    success, message = stop_face_monitoring(exam.id)
+    flash(message, "success" if success else "error")
+
+    return redirect(url_for("main.dashboard"))
 
 @main.route("/logout", methods=["POST"])
 def logout():
+    candidate_id = session.get("candidate_id")
+    exam_session_id = session.get("exam_session_id")
+
+    if candidate_id and exam_session_id:
+        exam = db.session.get(ExamSession, exam_session_id)
+
+        if (
+            exam is not None
+            and exam.candidate_id == candidate_id
+            and exam.monitoring_status == "running"
+        ):
+            success, message = stop_face_monitoring(exam.id)
+
+            if not success:
+                flash(message, "error")
+                return redirect(url_for("main.dashboard"))
 
     session.clear()
 

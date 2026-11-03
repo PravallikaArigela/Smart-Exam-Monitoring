@@ -75,6 +75,12 @@ class ExamSession(db.Model):
         default="active",
         nullable=False
     )
+    
+    monitoring_status = db.Column(
+    db.String(20),
+    default="stopped",
+    nullable=False
+    )
 
     # One candidate can have multiple examination sessions
     candidate = db.relationship(

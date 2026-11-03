@@ -1,47 +1,46 @@
-from unittest.mock import patch
+import threading
+from unittest.mock import patch, MagicMock
+
+import cv2
+import numpy as np
+import pytest
 
 from app import create_app, db
 from app.models import ExamSession, MonitoringEvent
 from app.face_monitor import monitor_exam
 
-app = create_app()
 
-with app.app_context():
-    exam = (
-        db.session.query(ExamSession)
-        .filter_by(status="active")
-        .order_by(ExamSession.id.desc())
-        .first()
-    )
+def test_detection_failure_event():
+    app = create_app()
 
-    if exam is None:
-        print("No active exam session found. Start an exam first.")
-    else:
-        try:
-            with patch(
-                "app.face_monitor.cv2.CascadeClassifier.detectMultiScale",
-                side_effect=__import__("cv2").error(
-                    "Simulated detection failure"
-                )
-            ):
-                with patch(
-                    "app.face_monitor.cv2.VideoCapture"
-                ) as mock_camera:
-                    camera = mock_camera.return_value
-                    camera.isOpened.return_value = True
-                    camera.read.return_value = (
-                        True,
-                        __import__("numpy").zeros(
-                            (100, 100, 3), dtype="uint8"
-                        )
-                    )
+    with app.app_context():
+        exam = (
+            db.session.query(ExamSession)
+            .filter_by(status="active")
+            .order_by(ExamSession.id.desc())
+            .first()
+        )
 
-                    success, message = monitor_exam(exam.id)
+        if exam is None:
+            pytest.skip("No active exam session found.")
 
-            print("Monitoring result:", success, message)
+        fake_camera = MagicMock()
+        fake_camera.isOpened.return_value = True
+        fake_camera.read.return_value = (
+            True,
+            np.zeros((100, 100, 3), dtype="uint8")
+        )
 
-        except Exception as error:
-            print("Test execution error:", error)
+        stop_event = threading.Event()
+
+        with patch(
+            "app.face_monitor.cv2.VideoCapture",
+            return_value=fake_camera
+        ), patch(
+            "app.face_monitor.cv2.CascadeClassifier.detectMultiScale",
+            side_effect=cv2.error("Simulated detection failure")
+        ):
+            monitor_exam(app, exam.id, stop_event)
 
         event = (
             db.session.query(MonitoringEvent)
@@ -53,9 +52,5 @@ with app.app_context():
             .first()
         )
 
-        if event:
-            print("PASS: detection_failure event was saved.")
-            print("Session ID:", event.session_id)
-            print("Details:", event.details)
-        else:
-            print("FAIL: detection_failure event was not found.")
+        assert event is not None
+        assert event.session_id == exam.id

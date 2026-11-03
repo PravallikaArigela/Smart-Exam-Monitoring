@@ -1,33 +1,38 @@
 from unittest.mock import patch, MagicMock
+import threading
+
+import pytest
 
 from app import create_app, db
 from app.models import ExamSession, MonitoringEvent
 from app.face_monitor import monitor_exam
 
-app = create_app()
 
-with app.app_context():
-    exam = (
-        db.session.query(ExamSession)
-        .filter_by(status="active")
-        .order_by(ExamSession.id.desc())
-        .first()
-    )
+def test_camera_read_failure_event():
+    app = create_app()
 
-    if exam is None:
-        print("No active exam session found. Start an exam first.")
-    else:
+    with app.app_context():
+        exam = (
+            db.session.query(ExamSession)
+            .filter_by(status="active")
+            .order_by(ExamSession.id.desc())
+            .first()
+        )
+
+        if exam is None:
+            pytest.skip("No active exam session found.")
+
         fake_camera = MagicMock()
         fake_camera.isOpened.return_value = True
         fake_camera.read.return_value = (False, None)
+
+        stop_event = threading.Event()
 
         with patch(
             "app.face_monitor.cv2.VideoCapture",
             return_value=fake_camera
         ):
-            success, message = monitor_exam(exam.id)
-
-        print("Monitoring result:", success, message)
+            monitor_exam(app, exam.id, stop_event)
 
         event = (
             db.session.query(MonitoringEvent)
@@ -39,9 +44,5 @@ with app.app_context():
             .first()
         )
 
-        if event:
-            print("PASS: camera_read_failure event was saved.")
-            print("Session ID:", event.session_id)
-            print("Details:", event.details)
-        else:
-            print("FAIL: camera_read_failure event was not found.")
+        assert event is not None
+        assert event.session_id == exam.id
