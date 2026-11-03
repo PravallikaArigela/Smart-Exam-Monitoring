@@ -206,3 +206,80 @@ Both normal examination completion and automatic session interruption have been 
 ExamGuard demonstrates the integration of web development, database management, and computer vision for online examination monitoring.
 
 The project provides a foundation for monitoring candidate activity through webcam-based face detection and examination session management.
+
+
+## Sprint 2 – Computer Vision and Face Monitoring
+
+### 1. Overview
+
+Sprint 2 focuses on implementing a reusable face monitoring component for the online examination system using Python and OpenCV.
+
+### 2. Implementation
+
+The following features have been implemented:
+
+* Created a reusable face monitoring component that accepts an exam session ID.
+* Implemented start and stop monitoring functions.
+* Associated monitoring status with the corresponding exam session.
+* Integrated face monitoring with the Flask application.
+* Implemented webcam availability checking.
+* Handled camera access failures and frame-reading failures.
+* Handled face detection failures and recorded monitoring events.
+* Implemented automatic monitoring shutdown when an examination ends or is interrupted.
+
+### 3. Monitoring Events
+
+The system records events in the SQLite database, including:
+
+* monitoring_started
+* monitoring_stopped
+* camera_unavailable
+* camera_read_failure
+* detection_failure
+* face_present
+* face_absent
+* multiple_faces
+* session_interrupted
+* session_ended
+
+### 4. Automated Testing
+
+Pytest is used to execute automated tests for monitoring failure scenarios.
+
+Install pytest:
+
+```bash
+python -m pip install pytest
+```
+
+Run the tests:
+
+```bash
+python -m pytest tests/ -v
+```
+
+### 5. Test Results
+
+The following automated tests were successfully executed:
+
+| Test Case              | Result |
+| ---------------------- | ------ |
+| Webcam unavailable     | PASSED |
+| Face detection failure | PASSED |
+| Camera read failure    | PASSED |
+
+**Total automated tests: 3 passed**
+
+### 6. Technologies Used
+
+* Python
+* Flask
+* OpenCV
+* SQLite
+* SQLAlchemy
+* Pytest
+* HTML and CSS
+
+### 7. Sprint 2 Outcome
+
+The face monitoring component is integrated with the examination session lifecycle. The system can start and stop monitoring, associate monitoring status with exam sessions, and record camera and detection failure events.
